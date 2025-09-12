@@ -100,11 +100,11 @@ def main():
             st.markdown("## 🔗 Navigation")
             
             # Direct page links
-            if st.button("📊 Dashboard"):
+            if st.button("📊 Dashboard", key="nav_dashboard"):
                 st.switch_page("pages/Dashboard.py")
-            if st.button("➕ Create Campaign"):
+            if st.button("➕ Create Campaign", key="nav_create"):
                 st.switch_page("pages/Create_Campaign.py")
-            if st.button("📈 Manage Campaigns"):
+            if st.button("📈 Manage Campaigns", key="nav_campaigns"):
                 st.switch_page("pages/Campaigns.py")
             
             st.markdown("---")
@@ -113,7 +113,7 @@ def main():
             st.markdown(f"**👤 {st.session_state.user.get('username', 'User')}**")
             
             # Logout button
-            if st.button("🚪 Logout"):
+            if st.button("🚪 Logout", key="nav_logout"):
                 from components.auth import logout
                 logout()
         
@@ -180,10 +180,10 @@ def main():
         st.markdown("### 🚀 Quick Actions")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("➕ Create Campaign", type="primary"):
+            if st.button("➕ Create Campaign", key="create_campaign_btn" type="primary"):
                 st.switch_page("pages/Create_Campaign.py")
         with col2:
-            if st.button("📈 Manage Campaigns"):
+            if st.button("📈 Manage Campaigns", key="manage_campaigns_btn"):
                 st.switch_page("pages/Campaigns.py")
 
 if __name__ == "__main__":

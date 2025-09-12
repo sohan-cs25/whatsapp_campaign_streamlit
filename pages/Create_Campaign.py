@@ -14,14 +14,14 @@ st.title("➕ Create New Campaign")
 
 # Add logout button in sidebar
 with st.sidebar:
-    if st.button("🚪 Logout"):
+    if st.button("🚪 Logout", key="create_logout"):
         logout()
     
     # Show navigation hint if campaign was just created
     if st.session_state.get('campaign_created', False) and st.session_state.get('selected_campaign'):
         st.markdown("---")
         st.success(f"✅ Campaign {st.session_state.selected_campaign} created!")
-        if st.button("📈 Go to Campaigns Page", type="primary"):
+        if st.button("📈 Go to Campaigns Page", key="create_goto_campaigns", type="primary"):
             # Clear the flag
             st.session_state.campaign_created = False
             # Note: We can't navigate directly, but the button press will be visible
@@ -114,7 +114,7 @@ if uploaded_file is not None:
         st.metric("File Type", file_type)
     
     # Validate button
-    if st.button("🔍 Validate File"):
+    if st.button("🔍 Validate File", key="create_validate_file"):
         with st.spinner("Validating file..."):
             # Create a file-like object from stored content
             file_to_send = io.BytesIO(st.session_state.file_content)
@@ -200,8 +200,9 @@ col1, col2, col3 = st.columns([2, 1, 2])
 
 with col2:
     create_button = st.button(
-        "🚀 Create Campaign", 
-        use_container_width=False, 
+        "🚀 Create Campaign",
+        key="create_campaign_main_btn",
+        use_container_width=False,
         type="primary",
         disabled=not (template_name and uploaded_file and st.session_state.file_validated)
     )
@@ -264,7 +265,7 @@ if create_button:
                 st.success("✅ Campaign created successfully! Navigate to **📈 Campaigns** page from the sidebar to manage your campaign.")
                 
                 # Add button to create another campaign
-                if st.button("➕ Create Another Campaign"):
+                if st.button("➕ Create Another Campaign", key="create_another_campaign"):
                     # Clear session state and refresh
                     st.session_state.selected_campaign = None
                     st.session_state.show_manage = False

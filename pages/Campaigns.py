@@ -18,14 +18,14 @@ st.title("📈 Campaign Management")
 
 # Add logout button in sidebar
 with st.sidebar:
-    if st.button("🚪 Logout"):
+    if st.button("🚪 Logout", key="campaigns_logout"):
         logout()
     
     st.markdown("---")
     st.markdown("### 🎯 Quick Actions")
-    if st.button("➕ Create New Campaign"):
+    if st.button("➕ Create New Campaign", key="campaigns_create_new"):
         st.switch_page("pages/Create_Campaign.py")
-    if st.button("📊 View Dashboard"):
+    if st.button("📊 View Dashboard", key="campaigns_view_dashboard"):
         st.switch_page("pages/Dashboard.py")
     
 
@@ -224,13 +224,13 @@ if campaigns_response.get('results'):
             col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
             
             with col1:
-                if st.button("⏮️ First", 
+                if st.button("⏮️ First", key="campaigns_first_page", 
                             disabled=st.session_state.current_page == 1):
                     st.session_state.current_page = 1
                     st.rerun()
             
             with col2:
-                if st.button("◀️ Previous",
+                if st.button("◀️ Previous", key="campaigns_prev_page",
                             disabled=st.session_state.current_page == 1):
                     st.session_state.current_page -= 1
                     st.rerun()
@@ -250,20 +250,20 @@ if campaigns_response.get('results'):
                     st.rerun()
             
             with col4:
-                if st.button("▶️ Next",
+                if st.button("▶️ Next", key="campaigns_next_page"
                             disabled=not campaigns_response.get('next')):
                     st.session_state.current_page += 1
                     st.rerun()
             
             with col5:
-                if st.button("⏭️ Last",
+                if st.button("⏭️ Last",key="campaigns_last_page",
                             disabled=st.session_state.current_page == total_pages):
                     st.session_state.current_page = total_pages
                     st.rerun()
         
         # Refresh button
         st.markdown("---")
-        if st.button("🔄 Refresh"):
+        if st.button("🔄 Refresh", key="campaigns_refresh"):
             st.rerun()
     
     elif selected_tab == "🎯 Manage Single Campaign":
@@ -304,7 +304,7 @@ if campaigns_response.get('results'):
             st.session_state.auto_refresh = auto_refresh
         
         with col3:
-            if st.button("🔄 Refresh"):
+            if st.button("🔄 Refresh",  key="campaigns_single_refresh"):
                 st.rerun()
         
         # Auto refresh logic
@@ -397,7 +397,7 @@ if campaigns_response.get('results'):
             
             with col1:
                 if campaign['status'] in ['pending', 'paused']:
-                    if st.button("▶️ Start", type="primary"):
+                    if st.button("▶️ Start", key="campaigns_start_btn", type="primary"):
                         try:
                             response = api.start_campaign(campaign_id)
                             success = response.get('success', False)
@@ -414,7 +414,7 @@ if campaigns_response.get('results'):
             
             with col2:
                 if campaign['status'] == 'running':
-                    if st.button("⏸️ Pause"):
+                    if st.button("⏸️ Pause", key="campaigns_pause_btn"):
                         try:
                             response = api.pause_campaign(campaign_id)
                             if response.get('success'):
@@ -428,7 +428,7 @@ if campaigns_response.get('results'):
             
             with col3:
                 if campaign['status'] == 'paused':
-                    if st.button("▶️ Resume"):
+                    if st.button("▶️ Resume",  key="campaigns_resume_btn"):
                         try:
                             response = api.resume_campaign(campaign_id)
                             if response.get('success'):
@@ -441,13 +441,13 @@ if campaigns_response.get('results'):
                             st.error(f"❌ Failed to resume campaign: {str(e)}")
             
             with col4:
-                if st.button("📊 Refresh Stats"):
+                if st.button("📊 Refresh Stats", key="campaigns_refresh_stats"):
                     st.rerun()
             
             with col5:
                 # Check Campaign Status button for stuck campaigns
                 if is_stuck or campaign['status'] == 'running':
-                    if st.button("🔍 Check Status", 
+                    if st.button("🔍 Check Status", key="campaigns_check_status",
                                 help="Check and update campaign completion status"):
                         with st.spinner("Checking campaign status..."):
                             try:
@@ -474,7 +474,7 @@ if campaigns_response.get('results'):
                 has_data = campaign.get('sent_count', 0) > 0 or campaign['status'] == 'completed'
                 
                 if st.button("📥 Export Report", 
-                            width="content", 
+                            key="campaigns_export_report",
                             disabled=not has_data,
                             help="Export campaign report (available when messages have been sent)"):
                     # Generate campaign report
@@ -644,7 +644,7 @@ if campaigns_response.get('results'):
             
 else:
     st.info("No campaigns found. Create your first campaign to get started!")
-    if st.button("➕ Create Your First Campaign"):
+    if st.button("➕ Create Your First Campaign", key="campaigns_create_first"):
         st.switch_page("pages/Create_Campaign.py")
 
 # Add workflow explanation at the bottom

@@ -16,13 +16,13 @@ st.title("📊 Campaign Dashboard")
 
 # Add logout button in sidebar
 with st.sidebar:
-    if st.button("🚪 Logout"):
+    if st.button("🚪 Logout", key="dashboard_logout"):
         logout()
 
 # Refresh button
 col1, col2, col3 = st.columns([6, 1, 1])
 with col3:
-    if st.button("🔄 Refresh"):
+    if st.button("🔄 Refresh", key="dashboard_refresh"):
         st.rerun()
 
 # Get statistics from API with error handling
@@ -183,7 +183,7 @@ if campaigns_response.get('results'):
     )
 else:
     st.info("No campaigns found. Create your first campaign to get started!")
-    if st.button("➕ Create First Campaign"):
+    if st.button("➕ Create First Campaign", key="dashboard_create_first"):
         st.switch_page("pages/Create_Campaign.py")
 
 # Recent Activity
@@ -220,5 +220,5 @@ if campaigns_response.get('results'):
         st.markdown("---")
 else:
     st.info("No recent campaigns found. Create your first campaign to get started!")
-    if st.button("➕ Create First Campaign"):
+    if st.button("➕ Create First Campaign", key="dashboard_create_first_recent"):
         st.switch_page("pages/Create_Campaign.py")
