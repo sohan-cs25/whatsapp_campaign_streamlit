@@ -16,7 +16,7 @@ st.title("📊 Campaign Dashboard")
 
 # Add logout button in sidebar
 with st.sidebar:
-    if st.button("🚪 Logout", width="stretch"):
+    if st.button("🚪 Logout"):
         logout()
 
 # Refresh button
@@ -103,7 +103,7 @@ with col1:
             margin=dict(t=0, b=0, l=0, r=0),
             showlegend=True
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig)
     else:
         st.info("No campaign data available")
 
@@ -138,7 +138,7 @@ with col2:
             yaxis_title="Messages",
             showlegend=False
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig)
     else:
         st.info("No message data available")
 

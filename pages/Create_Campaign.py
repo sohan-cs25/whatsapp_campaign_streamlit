@@ -14,14 +14,14 @@ st.title("➕ Create New Campaign")
 
 # Add logout button in sidebar
 with st.sidebar:
-    if st.button("🚪 Logout", width="stretch"):
+    if st.button("🚪 Logout"):
         logout()
     
     # Show navigation hint if campaign was just created
     if st.session_state.get('campaign_created', False) and st.session_state.get('selected_campaign'):
         st.markdown("---")
         st.success(f"✅ Campaign {st.session_state.selected_campaign} created!")
-        if st.button("📈 Go to Campaigns Page", width="stretch", type="primary"):
+        if st.button("📈 Go to Campaigns Page", type="primary"):
             # Clear the flag
             st.session_state.campaign_created = False
             # Note: We can't navigate directly, but the button press will be visible
@@ -114,7 +114,7 @@ if uploaded_file is not None:
         st.metric("File Type", file_type)
     
     # Validate button
-    if st.button("🔍 Validate File", width="stretch"):
+    if st.button("🔍 Validate File"):
         with st.spinner("Validating file..."):
             # Create a file-like object from stored content
             file_to_send = io.BytesIO(st.session_state.file_content)
@@ -166,7 +166,7 @@ if uploaded_file is not None:
         if validation_response and 'validation_errors' in validation_response and validation_response['validation_errors']:
             with st.expander("⚠️ View Validation Errors", expanded=False):
                 errors_df = pd.DataFrame(validation_response['validation_errors'])
-                st.dataframe(errors_df, width="stretch", hide_index=True)
+                st.dataframe(errors_df, hide_index=True)
         
         # Preview data
         if st.session_state.file_content:
@@ -181,7 +181,7 @@ if uploaded_file is not None:
                     df = pd.read_excel(file_for_preview)
                 
                 with st.expander("👁️ Preview Data (First 5 rows)", expanded=True):
-                    st.dataframe(df.head(), width="stretch", hide_index=True)
+                    st.dataframe(df.head(), hide_index=True)
                     
                 # Show data statistics
                 col1, col2 = st.columns(2)
@@ -264,7 +264,7 @@ if create_button:
                 st.success("✅ Campaign created successfully! Navigate to **📈 Campaigns** page from the sidebar to manage your campaign.")
                 
                 # Add button to create another campaign
-                if st.button("➕ Create Another Campaign", width="stretch"):
+                if st.button("➕ Create Another Campaign"):
                     # Clear session state and refresh
                     st.session_state.selected_campaign = None
                     st.session_state.show_manage = False
@@ -312,5 +312,5 @@ with st.expander("📄 File Format Example", expanded=False):
         'has_media': [False, True, False],
         'media_url': ['', 'https://example.com/welcome.jpg', '']
     })
-    st.dataframe(example_df, width="stretch", hide_index=True)
+    st.dataframe(example_df, hide_index=True)
     
