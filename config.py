@@ -1,12 +1,14 @@
 
 import os
 from dotenv import load_dotenv
+import streamlit as st
 
 # Load environment variables
 load_dotenv()
 
 # API Configuration
-API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000/api')
+# API_BASE_URL = os.getenv('API_BASE_URL')
+API_BASE_URL = st.secrets["API_BASE_URL"]
 
 # App Configuration
 APP_NAME = "WhatsApp Campaign Manager"
