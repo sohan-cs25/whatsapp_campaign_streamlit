@@ -18,14 +18,14 @@ st.title("📈 Campaign Management")
 
 # Add logout button in sidebar
 with st.sidebar:
-    if st.button("🚪 Logout", width="stretch"):
+    if st.button("🚪 Logout"):
         logout()
     
     st.markdown("---")
     st.markdown("### 🎯 Quick Actions")
-    if st.button("➕ Create New Campaign", width="stretch"):
+    if st.button("➕ Create New Campaign"):
         st.switch_page("pages/Create_Campaign.py")
-    if st.button("📊 View Dashboard", width="stretch"):
+    if st.button("📊 View Dashboard"):
         st.switch_page("pages/Dashboard.py")
     
 
@@ -142,7 +142,7 @@ if campaigns_response.get('results'):
                 with col5:
                     button_col1, button_col2 = st.columns(2)
                     with button_col1:
-                        if st.button("Manage", key=f"manage_{campaign_id}", width="stretch"):
+                        if st.button("Manage", key=f"manage_{campaign_id}"):
                             st.session_state.selected_campaign = campaign_id
                             st.session_state.show_manage = True
                             st.rerun()
@@ -152,7 +152,7 @@ if campaigns_response.get('results'):
                         has_data = campaign.get('sent_count', 0) > 0 or status == 'completed'
                         if st.button("📥 Export", 
                                     key=f"export_{campaign_id}",
-                                    width="stretch",
+                                    width="content",
                                     disabled=not has_data,
                                     help="Export report (available when messages have been sent)"):
                             # Generate report for this campaign
@@ -224,13 +224,13 @@ if campaigns_response.get('results'):
             col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
             
             with col1:
-                if st.button("⏮️ First", width="stretch", 
+                if st.button("⏮️ First", 
                             disabled=st.session_state.current_page == 1):
                     st.session_state.current_page = 1
                     st.rerun()
             
             with col2:
-                if st.button("◀️ Previous", width="stretch",
+                if st.button("◀️ Previous",
                             disabled=st.session_state.current_page == 1):
                     st.session_state.current_page -= 1
                     st.rerun()
@@ -250,20 +250,20 @@ if campaigns_response.get('results'):
                     st.rerun()
             
             with col4:
-                if st.button("▶️ Next", width="stretch",
+                if st.button("▶️ Next",
                             disabled=not campaigns_response.get('next')):
                     st.session_state.current_page += 1
                     st.rerun()
             
             with col5:
-                if st.button("⏭️ Last", width="stretch",
+                if st.button("⏭️ Last",
                             disabled=st.session_state.current_page == total_pages):
                     st.session_state.current_page = total_pages
                     st.rerun()
         
         # Refresh button
         st.markdown("---")
-        if st.button("🔄 Refresh", width="stretch"):
+        if st.button("🔄 Refresh"):
             st.rerun()
     
     elif selected_tab == "🎯 Manage Single Campaign":
@@ -397,7 +397,7 @@ if campaigns_response.get('results'):
             
             with col1:
                 if campaign['status'] in ['pending', 'paused']:
-                    if st.button("▶️ Start", width="stretch", type="primary"):
+                    if st.button("▶️ Start", type="primary"):
                         try:
                             response = api.start_campaign(campaign_id)
                             success = response.get('success', False)
@@ -414,7 +414,7 @@ if campaigns_response.get('results'):
             
             with col2:
                 if campaign['status'] == 'running':
-                    if st.button("⏸️ Pause", width="stretch"):
+                    if st.button("⏸️ Pause"):
                         try:
                             response = api.pause_campaign(campaign_id)
                             if response.get('success'):
@@ -428,7 +428,7 @@ if campaigns_response.get('results'):
             
             with col3:
                 if campaign['status'] == 'paused':
-                    if st.button("▶️ Resume", width="stretch"):
+                    if st.button("▶️ Resume"):
                         try:
                             response = api.resume_campaign(campaign_id)
                             if response.get('success'):
@@ -441,13 +441,13 @@ if campaigns_response.get('results'):
                             st.error(f"❌ Failed to resume campaign: {str(e)}")
             
             with col4:
-                if st.button("📊 Refresh Stats", width="stretch"):
+                if st.button("📊 Refresh Stats"):
                     st.rerun()
             
             with col5:
                 # Check Campaign Status button for stuck campaigns
                 if is_stuck or campaign['status'] == 'running':
-                    if st.button("🔍 Check Status", width="stretch", 
+                    if st.button("🔍 Check Status", 
                                 help="Check and update campaign completion status"):
                         with st.spinner("Checking campaign status..."):
                             try:
@@ -474,7 +474,7 @@ if campaigns_response.get('results'):
                 has_data = campaign.get('sent_count', 0) > 0 or campaign['status'] == 'completed'
                 
                 if st.button("📥 Export Report", 
-                            width="stretch", 
+                            width="content", 
                             disabled=not has_data,
                             help="Export campaign report (available when messages have been sent)"):
                     # Generate campaign report
@@ -634,7 +634,7 @@ if campaigns_response.get('results'):
                         if available_columns:
                             st.dataframe(
                                 messages_df[available_columns],
-                                width="stretch",
+                                width="content",
                                 hide_index=True
                             )
                         else:
