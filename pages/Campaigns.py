@@ -250,7 +250,7 @@ if campaigns_response.get('results'):
                     st.rerun()
             
             with col4:
-                if st.button("▶️ Next", key="campaigns_next_page"
+                if st.button("▶️ Next", key="campaigns_next_page",
                             disabled=not campaigns_response.get('next')):
                     st.session_state.current_page += 1
                     st.rerun()

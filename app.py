@@ -176,15 +176,15 @@ def main():
             """, unsafe_allow_html=True)
         
         # Quick Actions
-        st.markdown("---")
-        st.markdown("### 🚀 Quick Actions")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("➕ Create Campaign", key="create_campaign_btn", type="primary"):
-                st.switch_page("pages/Create_Campaign.py")
-        with col2:
-            if st.button("📈 Manage Campaigns", key="manage_campaigns_btn"):
-                st.switch_page("pages/Campaigns.py")
+        # st.markdown("---")
+        # st.markdown("### 🚀 Quick Actions")
+        # col1, col2 = st.columns(2)
+        # with col1:
+        #     if st.button("➕ Create Campaign", key="create_campaign_btn", type="primary"):
+        #         st.switch_page("pages/Create_Campaign.py")
+        # with col2:
+        #     if st.button("📈 Manage Campaigns", key="manage_campaigns_btn"):
+        #         st.switch_page("pages/Campaigns.py")
 
 if __name__ == "__main__":
     main()
