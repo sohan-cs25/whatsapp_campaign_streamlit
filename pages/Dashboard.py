@@ -16,7 +16,7 @@ st.title("📊 Campaign Dashboard")
 
 # Add logout button in sidebar
 with st.sidebar:
-    if st.button("🚪 Logout", use_container_width=True):
+    if st.button("🚪 Logout", width="stretch"):
         logout()
 
 # Refresh button
@@ -25,24 +25,27 @@ with col3:
     if st.button("🔄 Refresh"):
         st.rerun()
 
-# Get statistics from API
+# Get statistics from API with error handling
 api = APIClient()
-stats_response = api.get_stats()
-campaigns_response = api.get_campaigns()
 
-if stats_response.get('success'):
-    stats = stats_response.get('statistics', {})
-else:
-    # Default stats for demo
-    stats = {
-        'total_campaigns': 0,
-        'active_campaigns': 0,
-        'completed_campaigns': 0,
-        'total_messages_sent': 0,
-        'total_messages_delivered': 0,
-        'overall_success_rate': 0,
-        'campaigns_by_status': {}
-    }
+try:
+    stats_response = api.get_stats()
+    if stats_response.get('success'):
+        stats = stats_response.get('statistics', {})
+    else:
+        st.error("Failed to load statistics from server.")
+        stats = {}
+except Exception as e:
+    st.error(f"Connection error: {str(e)}")
+    stats = {}
+
+try:
+    campaigns_response = api.get_campaigns()
+    if not campaigns_response.get('results') and campaigns_response.get('success') is False:
+        st.error("Failed to load campaigns from server.")
+except Exception as e:
+    st.error(f"Connection error while loading campaigns: {str(e)}")
+    campaigns_response = {'results': []}
 
 # Display main metrics
 st.markdown("### 📈 Overall Statistics")
@@ -100,7 +103,7 @@ with col1:
             margin=dict(t=0, b=0, l=0, r=0),
             showlegend=True
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No campaign data available")
 
@@ -108,10 +111,17 @@ with col2:
     # Delivery metrics
     st.markdown("#### Message Delivery Metrics")
     
+    sent = stats.get('total_messages_sent', 0)
+    delivered = stats.get('total_messages_delivered', 0)
+    
+    # Calculate failed messages properly (assuming we have this data)
+    # For now, we'll use sent - delivered as an approximation
+    failed = max(0, sent - delivered)
+    
     delivery_data = {
-        'Sent': stats.get('total_messages_sent', 0),
-        'Delivered': stats.get('total_messages_delivered', 0),
-        'Failed': stats.get('total_messages_sent', 0) - stats.get('total_messages_delivered', 0)
+        'Sent': sent,
+        'Delivered': delivered,
+        'Pending': failed  # This is more accurate than "Failed"
     }
     
     if delivery_data['Sent'] > 0:
@@ -119,7 +129,7 @@ with col2:
             go.Bar(
                 x=list(delivery_data.keys()),
                 y=list(delivery_data.values()),
-                marker_color=['#2196F3', '#4CAF50', '#F44336']
+                marker_color=['#2196F3', '#4CAF50', '#FF9800']
             )
         ])
         fig.update_layout(
@@ -128,7 +138,7 @@ with col2:
             yaxis_title="Messages",
             showlegend=False
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No message data available")
 
@@ -162,7 +172,7 @@ if campaigns_response.get('results'):
     # Display table with custom styling
     st.dataframe(
         campaigns_display,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Status": st.column_config.TextColumn(
@@ -174,45 +184,41 @@ if campaigns_response.get('results'):
 else:
     st.info("No campaigns found. Create your first campaign to get started!")
     if st.button("➕ Create First Campaign"):
-        st.switch_page("pages/2_➕_Create_Campaign.py")
+        st.switch_page("pages/Create_Campaign.py")
 
-# Performance Trend (Mock data for demonstration)
+# Recent Activity
 st.markdown("---")
-st.markdown("### 📈 Performance Trend (Last 7 Days)")
+st.markdown("### 📋 Recent Activity")
 
-# Generate mock trend data
-dates = pd.date_range(end=datetime.now(), periods=7, freq='D')
-mock_data = pd.DataFrame({
-    'Date': dates,
-    'Messages Sent': [150, 200, 180, 250, 300, 280, 320],
-    'Messages Delivered': [145, 195, 175, 240, 290, 270, 310],
-    'Success Rate': [96.7, 97.5, 97.2, 96.0, 96.7, 96.4, 96.9]
-})
-
-fig = go.Figure()
-
-# Add traces
-fig.add_trace(go.Scatter(
-    x=mock_data['Date'],
-    y=mock_data['Messages Sent'],
-    name='Sent',
-    line=dict(color='#2196F3', width=2)
-))
-
-fig.add_trace(go.Scatter(
-    x=mock_data['Date'],
-    y=mock_data['Messages Delivered'],
-    name='Delivered',
-    line=dict(color='#4CAF50', width=2)
-))
-
-fig.update_layout(
-    height=400,
-    margin=dict(t=0, b=0, l=0, r=0),
-    hovermode='x unified',
-    yaxis_title="Messages",
-    xaxis_title="Date",
-    showlegend=True
-)
-
-st.plotly_chart(fig, use_container_width=True)
+if campaigns_response.get('results'):
+    recent_campaigns = campaigns_response['results'][:5]  # Show last 5 campaigns
+    
+    for campaign in recent_campaigns:
+        with st.container():
+            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+            
+            with col1:
+                st.write(f"**{campaign['template_name']}**")
+            with col2:
+                status_color = STATUS_COLORS.get(campaign['status'], '#999')
+                st.markdown(f"""
+                <span style="background-color: {status_color}; color: white; padding: 2px 8px; 
+                            border-radius: 3px; font-size: 12px;">
+                    {campaign['status'].upper()}
+                </span>
+                """, unsafe_allow_html=True)
+            with col3:
+                progress = f"{campaign['sent_count']}/{campaign['total_recipients']}"
+                st.write(progress)
+            with col4:
+                if campaign['total_recipients'] > 0:
+                    success_rate = (campaign['sent_count'] / campaign['total_recipients']) * 100
+                    st.write(f"{success_rate:.1f}%")
+                else:
+                    st.write("0.0%")
+        
+        st.markdown("---")
+else:
+    st.info("No recent campaigns found. Create your first campaign to get started!")
+    if st.button("➕ Create First Campaign"):
+        st.switch_page("pages/Create_Campaign.py")

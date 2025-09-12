@@ -2,10 +2,9 @@
 
 import streamlit as st
 import pandas as pd
+import io
 from components.auth import require_auth, logout
 from components.api_client import APIClient
-import time
-import io
 
 # Check authentication
 require_auth()
@@ -15,8 +14,18 @@ st.title("➕ Create New Campaign")
 
 # Add logout button in sidebar
 with st.sidebar:
-    if st.button("🚪 Logout", use_container_width=True):
+    if st.button("🚪 Logout", width="stretch"):
         logout()
+    
+    # Show navigation hint if campaign was just created
+    if st.session_state.get('campaign_created', False) and st.session_state.get('selected_campaign'):
+        st.markdown("---")
+        st.success(f"✅ Campaign {st.session_state.selected_campaign} created!")
+        if st.button("📈 Go to Campaigns Page", width="stretch", type="primary"):
+            # Clear the flag
+            st.session_state.campaign_created = False
+            # Note: We can't navigate directly, but the button press will be visible
+            st.info("Please click on 'Campaigns' in the sidebar menu")
     
     st.markdown("---")
     st.markdown("### 📝 File Format")
@@ -44,7 +53,7 @@ with st.sidebar:
         data=csv,
         file_name="sample_campaign.csv",
         mime="text/csv",
-        use_container_width=True
+        width="stretch"
     )
 
 # Initialize session state
@@ -105,7 +114,7 @@ if uploaded_file is not None:
         st.metric("File Type", file_type)
     
     # Validate button
-    if st.button("🔍 Validate File", use_container_width=True):
+    if st.button("🔍 Validate File", width="stretch"):
         with st.spinner("Validating file..."):
             # Create a file-like object from stored content
             file_to_send = io.BytesIO(st.session_state.file_content)
@@ -118,15 +127,20 @@ if uploaded_file is not None:
                 file_to_send.type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             
             api = APIClient()
-            response = api.validate_file(file_to_send)
-            
-            if response.get('success'):
-                st.session_state.file_validated = True
-                st.session_state.file_data = response.get('file_info', {})
-                st.session_state.validation_response = response
-                st.success("✅ File validated successfully!")
-            else:
-                st.error(f"❌ Validation failed: {response.get('error')}")
+            try:
+                response = api.validate_file(file_to_send)
+                
+                if response.get('success'):
+                    st.session_state.file_validated = True
+                    st.session_state.file_data = response.get('file_info', {})
+                    st.session_state.validation_response = response
+                    st.success("✅ File validated successfully!")
+                else:
+                    st.error(f"❌ Validation failed: {response.get('error', 'Unknown error')}")
+                    st.session_state.file_validated = False
+                    st.session_state.validation_response = None
+            except Exception as e:
+                st.error(f"❌ Connection error during validation: {str(e)}")
                 st.session_state.file_validated = False
                 st.session_state.validation_response = None
     
@@ -152,7 +166,7 @@ if uploaded_file is not None:
         if validation_response and 'validation_errors' in validation_response and validation_response['validation_errors']:
             with st.expander("⚠️ View Validation Errors", expanded=False):
                 errors_df = pd.DataFrame(validation_response['validation_errors'])
-                st.dataframe(errors_df, use_container_width=True, hide_index=True)
+                st.dataframe(errors_df, width="stretch", hide_index=True)
         
         # Preview data
         if st.session_state.file_content:
@@ -167,7 +181,7 @@ if uploaded_file is not None:
                     df = pd.read_excel(file_for_preview)
                 
                 with st.expander("👁️ Preview Data (First 5 rows)", expanded=True):
-                    st.dataframe(df.head(), use_container_width=True, hide_index=True)
+                    st.dataframe(df.head(), width="stretch", hide_index=True)
                     
                 # Show data statistics
                 col1, col2 = st.columns(2)
@@ -205,63 +219,66 @@ if create_button:
             file_to_upload.type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         
         api = APIClient()
-        response = api.create_campaign(template_name, file_to_upload)
-        
-        if response.get('success'):
-            st.success("✅ Campaign created successfully!")
-            st.balloons()
+        try:
+            response = api.create_campaign(template_name, file_to_upload)
             
-            # Show campaign details
-            campaign = response.get('campaign', {})
-            
-            st.markdown("---")
-            st.markdown("### 🎉 Campaign Created!")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"""
-                **Campaign ID:** {campaign.get('id')}  
-                **Template:** {campaign.get('template_name')}  
-                **Status:** {campaign.get('status')}  
-                """)
-            with col2:
-                st.markdown(f"""
-                **Total Recipients:** {campaign.get('total_recipients', 0)}  
-                **Created At:** {campaign.get('created_at', 'N/A')}  
-                """)
-            
-            # Action buttons
-            st.markdown("---")
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if st.button("📊 View Dashboard", use_container_width=True):
-                    st.switch_page("pages/1_📊_Dashboard.py")
-            
-            with col2:
-                if st.button("▶️ Start Campaign", use_container_width=True):
-                    campaign_id = campaign.get('id')
-                    start_response = api.start_campaign(campaign_id)
-                    if start_response.get('success'):
-                        st.success("Campaign started!")
-                        time.sleep(2)
-                        st.switch_page("pages/3_📈_Campaigns.py")
-                    else:
-                        st.error(f"Failed to start: {start_response.get('error')}")
-            
-            with col3:
-                if st.button("📈 Manage Campaigns", use_container_width=True):
-                    st.switch_page("pages/3_📈_Campaigns.py")
-            
-            # Clear session state
-            st.session_state.file_validated = False
-            st.session_state.file_data = None
-            st.session_state.validation_response = None
-            st.session_state.file_content = None
-            st.session_state.file_name = None
-            
-        else:
-            st.error(f"❌ Failed to create campaign: {response.get('error')}")
+            if response.get('success'):
+                st.success("✅ Campaign created successfully!")
+                st.balloons()
+                
+                # Clear session state immediately after success
+                st.session_state.file_validated = False
+                st.session_state.file_data = None
+                st.session_state.validation_response = None
+                st.session_state.file_content = None
+                st.session_state.file_name = None
+                
+                # Show campaign details
+                campaign = response.get('campaign', {})
+                
+                # Store campaign ID in session state
+                st.session_state.selected_campaign = campaign.get('id')
+                st.session_state.show_manage = True
+                st.session_state.campaign_created = True
+                
+                st.markdown("---")
+                st.markdown("### 🎉 Campaign Created Successfully!")
+                
+                # Display campaign info
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.info(f"""
+                    **Campaign ID:** {campaign.get('id')}  
+                    **Template:** {campaign.get('template_name')}  
+                    **Status:** {campaign.get('status')}  
+                    """)
+                with col2:
+                    st.info(f"""
+                    **Recipients:** {campaign.get('total_recipients', 0)}  
+                    **Created:** {campaign.get('created_at', 'N/A')[:19] if campaign.get('created_at') else 'N/A'}  
+                    """)
+                
+                st.markdown("---")
+                
+                # Add prominent navigation message
+                st.success("✅ Campaign created successfully! Navigate to **📈 Campaigns** page from the sidebar to manage your campaign.")
+                
+                # Add button to create another campaign
+                if st.button("➕ Create Another Campaign", width="stretch"):
+                    # Clear session state and refresh
+                    st.session_state.selected_campaign = None
+                    st.session_state.show_manage = False
+                    st.session_state.campaign_created = False
+                    st.rerun()
+                
+                # Info message
+                st.info("💡 Tip: Go to 'Manage Campaigns' to start, pause, or monitor your campaign.")
+                
+            else:
+                st.error(f"❌ Failed to create campaign: {response.get('error', 'Unknown error')}")
+                
+        except Exception as e:
+            st.error(f"❌ Connection error during campaign creation: {str(e)}")
 
 # Instructions
 st.markdown("---")
@@ -295,12 +312,5 @@ with st.expander("📄 File Format Example", expanded=False):
         'has_media': [False, True, False],
         'media_url': ['', 'https://example.com/welcome.jpg', '']
     })
-    st.dataframe(example_df, use_container_width=True, hide_index=True)
+    st.dataframe(example_df, width="stretch", hide_index=True)
     
-    # Debug info (remove in production)
-    with st.expander("🔧 Debug Info", expanded=False):
-        st.write("Session State:")
-        st.write(f"- file_validated: {st.session_state.file_validated}")
-        st.write(f"- file_name: {st.session_state.file_name}")
-        st.write(f"- file_content size: {len(st.session_state.file_content) if st.session_state.file_content else 0} bytes")
-        st.write(f"- file_data: {st.session_state.file_data}")

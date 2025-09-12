@@ -16,7 +16,7 @@ class APIClient:
         """Get headers with authentication token"""
         headers = {'Content-Type': 'application/json'}
         if self.token:
-            headers['Authorization'] = f'Token {self.token}'
+            headers['Authorization'] = f'Token {self.token}'  # Django REST Framework token format
         return headers
     
     def _handle_response(self, response) -> Dict[str, Any]:
@@ -66,11 +66,33 @@ class APIClient:
         return self._handle_response(response)
     
     # Campaign APIs
-    def get_campaigns(self) -> Dict[str, Any]:
-        """Get all campaigns"""
+    def get_campaigns(self, page: int = 1) -> Dict[str, Any]:
+        """Get all campaigns with pagination"""
         url = f"{self.base_url}/campaigns/"
-        response = requests.get(url, headers=self._get_headers())
+        params = {'page': page}
+        response = requests.get(url, headers=self._get_headers(), params=params)
         return self._handle_response(response)
+    
+    def get_all_campaigns(self) -> Dict[str, Any]:
+        """Get all campaigns by fetching all pages"""
+        all_campaigns = []
+        page = 1
+        
+        while True:
+            response = self.get_campaigns(page=page)
+            if response.get('results'):
+                all_campaigns.extend(response['results'])
+                if not response.get('next'):  # No more pages
+                    break
+                page += 1
+            else:
+                break
+        
+        return {
+            'results': all_campaigns,
+            'count': len(all_campaigns),
+            'success': True
+        }
     
     def get_campaign(self, campaign_id: int) -> Dict[str, Any]:
         """Get campaign details"""
@@ -105,6 +127,12 @@ class APIClient:
     def resume_campaign(self, campaign_id: int) -> Dict[str, Any]:
         """Resume a campaign"""
         url = f"{self.base_url}/campaigns/{campaign_id}/resume/"
+        response = requests.post(url, headers=self._get_headers())
+        return self._handle_response(response)
+    
+    def check_campaign_status(self, campaign_id: int) -> Dict[str, Any]:
+        """Check and update campaign status"""
+        url = f"{self.base_url}/campaigns/{campaign_id}/check-status/"
         response = requests.post(url, headers=self._get_headers())
         return self._handle_response(response)
     

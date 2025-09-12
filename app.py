@@ -95,57 +95,96 @@ def main():
             login_form()
     else:
         # User is authenticated, show main app
+        # Clean navigation sidebar
+        with st.sidebar:
+            st.markdown("## 🔗 Navigation")
+            
+            # Direct page links
+            if st.button("📊 Dashboard", width="stretch"):
+                st.switch_page("pages/Dashboard.py")
+            if st.button("➕ Create Campaign", width="stretch"):
+                st.switch_page("pages/Create_Campaign.py")
+            if st.button("📈 Manage Campaigns", width="stretch"):
+                st.switch_page("pages/Campaigns.py")
+            
+            st.markdown("---")
+            
+            # User info
+            st.markdown(f"**👤 {st.session_state.user.get('username', 'User')}**")
+            
+            # Logout button
+            if st.button("🚪 Logout", width="stretch"):
+                from components.auth import logout
+                logout()
+        
+        # Main content header
         st.markdown(f"""
         <div class="main-header">
             <h1>{APP_ICON} {APP_NAME}</h1>
-            <p style="font-size: 1.2rem; opacity: 0.9;">Welcome back, {st.session_state.user.get('username', 'User')}!</p>
+            <p style="font-size: 1.2rem; opacity: 0.9;">Campaign Dashboard</p>
         </div>
         """, unsafe_allow_html=True)
         
-        # Welcome message
-        st.info(f"""
-        👋 Welcome to your WhatsApp Campaign Manager! 
+        # Get real metrics from API
+        from components.api_client import APIClient
+        api = APIClient()
         
-        Use the sidebar to navigate:
-        - **📊 Dashboard** - View your campaign statistics
-        - **➕ Create Campaign** - Start a new campaign
-        - **📈 Campaigns** - Manage existing campaigns
-        """)
+        try:
+            stats_response = api.get_stats()
+            stats = stats_response.get('statistics', {}) if stats_response.get('success') else {}
+        except Exception as e:
+            st.error(f"Failed to load statistics: {str(e)}")
+            stats = {}
         
-        # Quick stats
+        # Real-time metrics
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.markdown("""
+            total_campaigns = stats.get('total_campaigns', 0)
+            st.markdown(f"""
             <div class="metric-card">
-                <h3 style="color: #25D366;">12</h3>
+                <h3 style="color: #25D366;">{total_campaigns}</h3>
                 <p style="color: #666;">Total Campaigns</p>
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
-            st.markdown("""
+            active_campaigns = stats.get('active_campaigns', 0)
+            st.markdown(f"""
             <div class="metric-card">
-                <h3 style="color: #2196F3;">3</h3>
+                <h3 style="color: #2196F3;">{active_campaigns}</h3>
                 <p style="color: #666;">Active</p>
             </div>
             """, unsafe_allow_html=True)
         
         with col3:
-            st.markdown("""
+            messages_sent = stats.get('total_messages_sent', 0)
+            st.markdown(f"""
             <div class="metric-card">
-                <h3 style="color: #4CAF50;">8</h3>
-                <p style="color: #666;">Completed</p>
+                <h3 style="color: #4CAF50;">{messages_sent:,}</h3>
+                <p style="color: #666;">Messages Sent</p>
             </div>
             """, unsafe_allow_html=True)
         
         with col4:
-            st.markdown("""
+            success_rate = stats.get('overall_success_rate', 0)
+            st.markdown(f"""
             <div class="metric-card">
-                <h3 style="color: #FF9800;">1</h3>
-                <p style="color: #666;">Paused</p>
+                <h3 style="color: #FF9800;">{success_rate:.1f}%</h3>
+                <p style="color: #666;">Success Rate</p>
             </div>
             """, unsafe_allow_html=True)
+        
+        # Quick Actions
+        st.markdown("---")
+        st.markdown("### 🚀 Quick Actions")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("➕ Create Campaign", width="stretch", type="primary"):
+                st.switch_page("pages/Create_Campaign.py")
+        with col2:
+            if st.button("📈 Manage Campaigns", width="stretch"):
+                st.switch_page("pages/Campaigns.py")
 
 if __name__ == "__main__":
     main()

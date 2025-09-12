@@ -5,8 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import time
-import json
-import requests
+import io
 from components.auth import require_auth, logout
 from components.api_client import APIClient
 from config import STATUS_COLORS, STATUS_ICONS
@@ -19,188 +18,323 @@ st.title("📈 Campaign Management")
 
 # Add logout button in sidebar
 with st.sidebar:
-    if st.button("🚪 Logout", use_container_width=True):
+    if st.button("🚪 Logout", width="stretch"):
         logout()
     
     st.markdown("---")
     st.markdown("### 🎯 Quick Actions")
-    if st.button("➕ Create New Campaign", use_container_width=True):
+    if st.button("➕ Create New Campaign", width="stretch"):
         st.switch_page("pages/Create_Campaign.py")
-    if st.button("📊 View Dashboard", use_container_width=True):
+    if st.button("📊 View Dashboard", width="stretch"):
         st.switch_page("pages/Dashboard.py")
     
-    # Add debug section in sidebar
-    st.markdown("---")
-    st.markdown("### 🔍 Debug Tools")
-    show_debug = st.checkbox("Show Debug Info")
-    
-    if show_debug:
-        # Test API connection
-        if st.button("🧪 Test API Connection"):
-            api = APIClient()
-            try:
-                response = api.get_campaigns()
-                if response and 'results' in response:
-                    st.success("✅ API Connection OK")
-                    st.write(f"Found {len(response['results'])} campaigns")
-                else:
-                    st.error("❌ API Error")
-                    st.write(response)
-            except Exception as e:
-                st.error(f"❌ Connection Error: {str(e)}")
 
 # Initialize session state
 if 'selected_campaign' not in st.session_state:
     st.session_state.selected_campaign = None
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = 1
+if 'show_all_campaigns' not in st.session_state:
+    st.session_state.show_all_campaigns = False
+if 'show_manage' not in st.session_state:
+    st.session_state.show_manage = False
 
-# Debug information display
-if show_debug if 'show_debug' in locals() else False:
-    with st.expander("🔍 Debug Information", expanded=False):
-        st.write("**Session State:**")
-        st.write(f"- Logged in: {st.session_state.get('logged_in', False)}")
-        st.write(f"- Username: {st.session_state.get('username', 'Not set')}")
-        
-        # Check token from session state
-        token = st.session_state.get('token') or st.session_state.get('access_token')
-        if token:
-            st.write(f"- Token: {token[:20]}...")
-        else:
-            st.write("- Token: Not set")
-        
-        # API Client info
-        api = APIClient()
-        st.write(f"- API Base URL: {getattr(api, 'base_url', 'Not available')}")
+# Debug: Check if coming from Create Campaign page
+if st.session_state.selected_campaign and st.session_state.show_manage:
+    st.info(f"📍 Navigated to manage Campaign ID: {st.session_state.selected_campaign}")
 
-def debug_start_campaign(campaign_id):
-    """Enhanced start campaign function with debugging"""
-    st.write("🔍 **Debug Start Campaign Process:**")
-    
-    # Show campaign ID
-    st.write(f"- Campaign ID: {campaign_id}")
-    
-    # Get API client
-    api = APIClient()
-    
-    # Check if API client has the method
-    if hasattr(api, 'start_campaign'):
-        st.write("- ✅ API client has start_campaign method")
-        
-        try:
-            st.write("📡 **Making API Request...**")
-            
-            # Call the API
-            response = api.start_campaign(campaign_id)
-            
-            st.write("**API Response:**")
-            st.code(json.dumps(response, indent=2))
-            
-            if response.get('success'):
-                st.success("✅ Campaign started successfully!")
-                return True, response.get('message', 'Campaign started')
-            else:
-                st.error(f"❌ API Error: {response.get('error', 'Unknown error')}")
-                return False, response.get('error', 'Unknown error')
-                
-        except Exception as e:
-            st.error(f"❌ Exception occurred: {str(e)}")
-            st.write("**Exception Details:**")
-            st.exception(e)
-            return False, str(e)
-    else:
-        st.error("❌ API client doesn't have start_campaign method")
-        
-        # Try direct API call as fallback
-        st.write("🔄 **Trying direct API call...**")
-        
-        try:
-            # Get token from session state
-            token = st.session_state.get('token') or st.session_state.get('access_token')
-            
-            if not token:
-                st.error("❌ No authentication token found")
-                return False, "No authentication token"
-            
-            # Make direct API call
-            headers = {"Authorization": f"Bearer {token}"}
-            api_base = getattr(api, 'base_url', 'http://localhost:8000')
-            url = f"{api_base}/api/campaigns/{campaign_id}/start/"
-            
-            st.write(f"- URL: {url}")
-            st.write(f"- Headers: Authorization: Bearer {token[:20]}...")
-            
-            response = requests.post(url, headers=headers)
-            
-            st.write(f"- Status Code: {response.status_code}")
-            st.write(f"- Response Text: {response.text}")
-            
-            if response.status_code == 200:
-                response_data = response.json()
-                st.success("✅ Direct API call successful!")
-                return True, response_data.get('message', 'Campaign started')
-            else:
-                st.error(f"❌ Direct API call failed: {response.status_code}")
-                return False, f"HTTP {response.status_code}: {response.text}"
-                
-        except Exception as e:
-            st.error(f"❌ Direct API call exception: {str(e)}")
-            return False, str(e)
 
-# Get campaigns from API
+# Get campaigns from API with error handling
 api = APIClient()
-campaigns_response = api.get_campaigns()
+
+try:
+    # Fetch campaigns - either paginated or all
+    if st.session_state.show_all_campaigns:
+        campaigns_response = api.get_all_campaigns()
+    else:
+        campaigns_response = api.get_campaigns(page=st.session_state.current_page)
+    if not campaigns_response.get('success', True):  # Some APIs don't return success field
+        st.error("Failed to load campaigns from server.")
+        campaigns_response = {'results': [], 'count': 0}
+except Exception as e:
+    st.error(f"Connection error: {str(e)}")
+    st.info("Please check your internet connection and try again.")
+    campaigns_response = {'results': [], 'count': 0}
 
 if campaigns_response.get('results'):
     campaigns = campaigns_response['results']
     
-    # Campaign selector
-    st.markdown("### 📋 Select Campaign")
+    # Create tab selection
+    tab_options = ["📊 All Campaigns", "🎯 Manage Single Campaign"]
     
-    col1, col2, col3 = st.columns([3, 1, 1])
+    # Determine which tab to show based on session state
+    default_index = 1 if (st.session_state.show_manage and st.session_state.selected_campaign) else 0
+    selected_tab = st.radio("Select View", tab_options, index=default_index, horizontal=True, key="tab_selector")
     
-    with col1:
-        # Create campaign options
-        campaign_options = {
-            f"{c['id']} - {c['template_name']} ({c['status']})": c['id'] 
-            for c in campaigns
-        }
+    if selected_tab == "📊 All Campaigns":
+        st.session_state.show_manage = False
+        # Campaign Overview Table
+        st.markdown("### 📋 All Campaigns Overview")
         
-        selected_option = st.selectbox(
-            "Choose a campaign to manage",
-            options=list(campaign_options.keys()),
-            index=0 if not st.session_state.selected_campaign else None
-        )
+        # Show total count and pagination info
+        total_count = campaigns_response.get('count', len(campaigns))
+        page_size = 20  # This matches Django's PAGE_SIZE setting
+        total_pages = (total_count + page_size - 1) // page_size if not st.session_state.show_all_campaigns else 1
         
-        if selected_option:
-            st.session_state.selected_campaign = campaign_options[selected_option]
-    
-    with col2:
-        auto_refresh = st.checkbox("Auto Refresh (5s)", value=st.session_state.auto_refresh)
-        st.session_state.auto_refresh = auto_refresh
-    
-    with col3:
-        if st.button("🔄 Refresh Now"):
+        col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
+        with col1:
+            st.caption(f"Total campaigns: {total_count}")
+        with col2:
+            if not st.session_state.show_all_campaigns:
+                st.caption(f"Page {st.session_state.current_page} of {total_pages}")
+            else:
+                st.caption("Showing all campaigns")
+        with col3:
+            st.caption(f"Displaying: {len(campaigns)}")
+        with col4:
+            # Toggle between paginated and all campaigns
+            show_all = st.checkbox("Show All", value=st.session_state.show_all_campaigns,
+                                  help="Toggle between paginated view and showing all campaigns")
+            if show_all != st.session_state.show_all_campaigns:
+                st.session_state.show_all_campaigns = show_all
+                st.session_state.current_page = 1  # Reset to first page when toggling
+                st.rerun()
+        
+        # Create DataFrame for better display
+        campaigns_df = pd.DataFrame(campaigns)
+        
+        if not campaigns_df.empty:
+            # Add action column
+            for idx, campaign in campaigns_df.iterrows():
+                campaign_id = campaign['id']
+                status = campaign['status']
+                
+                # Create action buttons based on status
+                col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 2])
+                
+                with col1:
+                    st.write(f"**{campaign['template_name']}**")
+                    st.caption(f"ID: {campaign_id} | Created: {campaign.get('created_at', 'N/A')[:10]}")
+                
+                with col2:
+                    status_color = STATUS_COLORS.get(status, '#999')
+                    st.markdown(f"""
+                    <span style="background-color: {status_color}; color: white; padding: 4px 8px; 
+                                border-radius: 3px; font-size: 12px;">
+                        {status.upper()}
+                    </span>
+                    """, unsafe_allow_html=True)
+                
+                with col3:
+                    sent = campaign.get('sent_count', 0)
+                    total = campaign.get('total_recipients', 0)
+                    st.metric("Progress", f"{sent}/{total}")
+                
+                with col4:
+                    if total > 0:
+                        success_rate = (sent / total) * 100
+                        st.metric("Rate", f"{success_rate:.1f}%")
+                    else:
+                        st.metric("Rate", "0%")
+                
+                with col5:
+                    button_col1, button_col2 = st.columns(2)
+                    with button_col1:
+                        if st.button("Manage", key=f"manage_{campaign_id}", width="stretch"):
+                            st.session_state.selected_campaign = campaign_id
+                            st.session_state.show_manage = True
+                            st.rerun()
+                    
+                    with button_col2:
+                        # Export button - enabled for completed campaigns or campaigns with sent messages
+                        has_data = campaign.get('sent_count', 0) > 0 or status == 'completed'
+                        if st.button("📥 Export", 
+                                    key=f"export_{campaign_id}",
+                                    width="stretch",
+                                    disabled=not has_data,
+                                    help="Export report (available when messages have been sent)"):
+                            # Generate report for this campaign
+                            with st.spinner(f"Generating report for campaign {campaign_id}..."):
+                                try:
+                                    # Get campaign messages
+                                    messages_response = api.get_campaign_messages(campaign_id)
+                                    
+                                    if messages_response.get('results'):
+                                        messages_df = pd.DataFrame(messages_response['results'])
+                                        
+                                        # Add campaign info to the report
+                                        report_data = {
+                                            'Campaign ID': campaign_id,
+                                            'Template': campaign['template_name'],
+                                            'Status': status,
+                                            'Total Recipients': campaign.get('total_recipients', 0),
+                                            'Sent': campaign.get('sent_count', 0),
+                                            'Delivered': campaign.get('delivered_count', 0),
+                                            'Read': campaign.get('read_count', 0),
+                                            'Failed': campaign.get('failed_count', 0),
+                                            'Created At': campaign.get('created_at', ''),
+                                            'Started At': campaign.get('started_at', ''),
+                                            'Completed At': campaign.get('completed_at', '')
+                                        }
+                                        
+                                        # Create Excel file
+                                        output = io.BytesIO()
+                                        
+                                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                                            # Summary sheet
+                                            summary_df = pd.DataFrame([report_data])
+                                            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+                                            
+                                            # Messages detail sheet
+                                            if not messages_df.empty:
+                                                # Select relevant columns
+                                                export_columns = ['phone_number', 'status', 'sent_at', 
+                                                                'delivered_at', 'read_at', 'failed_at', 
+                                                                'error_message']
+                                                available_cols = [col for col in export_columns if col in messages_df.columns]
+                                                messages_export = messages_df[available_cols].copy()
+                                                messages_export.to_excel(writer, sheet_name='Messages', index=False)
+                                        
+                                        # Generate download
+                                        output.seek(0)
+                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                        filename = f"campaign_{campaign_id}_report_{timestamp}.xlsx"
+                                        
+                                        st.download_button(
+                                            label="📥 Download",
+                                            data=output,
+                                            file_name=filename,
+                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            key=f"download_{campaign_id}"
+                                        )
+                                        st.success(f"✅ Report ready: {filename}")
+                                    else:
+                                        st.warning("No message data available")
+                                        
+                                except Exception as e:
+                                    st.error(f"Failed to generate report: {str(e)}")
+                
+                st.markdown("---")
+        
+        # Pagination controls (only show when not displaying all)
+        if not st.session_state.show_all_campaigns:
+            st.markdown("---")
+            col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+            
+            with col1:
+                if st.button("⏮️ First", width="stretch", 
+                            disabled=st.session_state.current_page == 1):
+                    st.session_state.current_page = 1
+                    st.rerun()
+            
+            with col2:
+                if st.button("◀️ Previous", width="stretch",
+                            disabled=st.session_state.current_page == 1):
+                    st.session_state.current_page -= 1
+                    st.rerun()
+            
+            with col3:
+                # Page number input
+                new_page = st.number_input(
+                    "Go to page",
+                    min_value=1,
+                    max_value=total_pages,
+                    value=st.session_state.current_page,
+                    step=1,
+                    label_visibility="collapsed"
+                )
+                if new_page != st.session_state.current_page:
+                    st.session_state.current_page = new_page
+                    st.rerun()
+            
+            with col4:
+                if st.button("▶️ Next", width="stretch",
+                            disabled=not campaigns_response.get('next')):
+                    st.session_state.current_page += 1
+                    st.rerun()
+            
+            with col5:
+                if st.button("⏭️ Last", width="stretch",
+                            disabled=st.session_state.current_page == total_pages):
+                    st.session_state.current_page = total_pages
+                    st.rerun()
+        
+        # Refresh button
+        st.markdown("---")
+        if st.button("🔄 Refresh", width="stretch"):
             st.rerun()
     
-    # Auto refresh logic
-    if st.session_state.auto_refresh:
-        time.sleep(5)
-        st.rerun()
-    
-    # Display selected campaign details
-    if st.session_state.selected_campaign:
-        campaign_id = st.session_state.selected_campaign
+    elif selected_tab == "🎯 Manage Single Campaign":
+        # Set the flag when this tab is selected
+        st.session_state.show_manage = True
         
-        # Get campaign details
-        campaign_response = api.get_campaign(campaign_id)
-        stats_response = api.get_campaign_statistics(campaign_id)
+        # Campaign selector
+        st.markdown("### 🎯 Select Campaign to Manage")
         
-        if campaign_response.get('id'):
-            campaign = campaign_response
-            stats = stats_response.get('statistics', {}) if stats_response.get('success') else {}
+        col1, col2, col3 = st.columns([3, 1, 1])
+        
+        with col1:
+            # Create campaign options
+            campaign_options = {
+                f"{c['id']} - {c['template_name']} ({c['status']})": c['id'] 
+                for c in campaigns
+            }
             
-            st.markdown("---")
+            # Find the index of the selected campaign if one is already selected
+            selected_index = 0
+            if st.session_state.selected_campaign:
+                for idx, (option_text, campaign_id) in enumerate(campaign_options.items()):
+                    if campaign_id == st.session_state.selected_campaign:
+                        selected_index = idx
+                        break
+            
+            selected_option = st.selectbox(
+                "Choose a campaign",
+                options=list(campaign_options.keys()),
+                index=selected_index
+            )
+            
+            if selected_option:
+                st.session_state.selected_campaign = campaign_options[selected_option]
+        
+        with col2:
+            auto_refresh = st.checkbox("Auto Refresh", value=st.session_state.auto_refresh)
+            st.session_state.auto_refresh = auto_refresh
+        
+        with col3:
+            if st.button("🔄 Refresh"):
+                st.rerun()
+        
+        # Auto refresh logic
+        if st.session_state.auto_refresh:
+            time.sleep(5)
+            st.rerun()
+        
+        # Display selected campaign details
+        if st.session_state.selected_campaign:
+            campaign_id = st.session_state.selected_campaign
+            
+            # Get campaign details with error handling
+            try:
+                campaign_response = api.get_campaign(campaign_id)
+                if not campaign_response.get('id'):
+                    st.error("Failed to load campaign details.")
+                    st.stop()
+                campaign = campaign_response
+            except Exception as e:
+                st.error(f"Error loading campaign: {str(e)}")
+                st.stop()
+            
+            try:
+                stats_response = api.get_campaign_statistics(campaign_id)
+                stats = stats_response.get('statistics', {}) if stats_response.get('success') else {}
+            except Exception as e:
+                st.warning(f"Could not load campaign statistics: {str(e)}")
+                stats = {}
+            
+                st.markdown("---")
             
             # Campaign Header
             col1, col2 = st.columns([3, 1])
@@ -230,7 +364,7 @@ if campaigns_response.get('results'):
                 st.metric("Read", campaign.get('read_count', 0))
             with col5:
                 st.metric("Failed", campaign.get('failed_count', 0))
-            
+        
             # Progress Bar
             if campaign['total_recipients'] > 0:
                 progress = (campaign['sent_count'] / campaign['total_recipients']) * 100
@@ -246,144 +380,211 @@ if campaigns_response.get('results'):
                         {progress:.1f}% Complete
                     </div>
                     """, unsafe_allow_html=True)
-            
+        
             # Campaign Actions
             st.markdown("---")
             st.markdown("### 🎮 Campaign Controls")
             
-            col1, col2, col3, col4, col5 = st.columns(5)
+            # Check if campaign is stuck (running but all messages sent)
+            is_stuck = (campaign['status'] == 'running' and 
+                       campaign.get('sent_count', 0) == campaign.get('total_recipients', 0) and 
+                       campaign.get('total_recipients', 0) > 0)
+            
+            if is_stuck:
+                st.warning("⚠️ This campaign appears to be stuck in 'running' state even though all messages have been sent.")
+            
+            col1, col2, col3, col4, col5, col6 = st.columns(6)
             
             with col1:
                 if campaign['status'] in ['pending', 'paused']:
-                    if st.button("▶️ Start", use_container_width=True, type="primary"):
-                        # Use debug version if debug mode is on
-                        if show_debug if 'show_debug' in locals() else False:
-                            success, message = debug_start_campaign(campaign_id)
-                        else:
-                            # Use original API client method
+                    if st.button("▶️ Start", width="stretch", type="primary"):
+                        try:
                             response = api.start_campaign(campaign_id)
                             success = response.get('success', False)
-                            message = response.get('message') if success else response.get('error')
-                        
-                        if success:
-                            st.success(f"✅ {message}")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(f"❌ {message}")
+                            message = response.get('message') if success else response.get('error', 'Unknown error')
+                            
+                            if success:
+                                st.success(f"✅ {message}")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {message}")
+                        except Exception as e:
+                            st.error(f"❌ Failed to start campaign: {str(e)}")
             
             with col2:
                 if campaign['status'] == 'running':
-                    if st.button("⏸️ Pause", use_container_width=True):
-                        response = api.pause_campaign(campaign_id)
-                        if response.get('success'):
-                            st.success("Campaign paused!")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(response.get('error'))
+                    if st.button("⏸️ Pause", width="stretch"):
+                        try:
+                            response = api.pause_campaign(campaign_id)
+                            if response.get('success'):
+                                st.success("Campaign paused!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(response.get('error', 'Failed to pause campaign'))
+                        except Exception as e:
+                            st.error(f"❌ Failed to pause campaign: {str(e)}")
             
             with col3:
                 if campaign['status'] == 'paused':
-                    if st.button("▶️ Resume", use_container_width=True):
-                        response = api.resume_campaign(campaign_id)
-                        if response.get('success'):
-                            st.success("Campaign resumed!")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(response.get('error'))
+                    if st.button("▶️ Resume", width="stretch"):
+                        try:
+                            response = api.resume_campaign(campaign_id)
+                            if response.get('success'):
+                                st.success("Campaign resumed!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(response.get('error', 'Failed to resume campaign'))
+                        except Exception as e:
+                            st.error(f"❌ Failed to resume campaign: {str(e)}")
             
             with col4:
-                if st.button("📊 Refresh Stats", use_container_width=True):
+                if st.button("📊 Refresh Stats", width="stretch"):
                     st.rerun()
             
             with col5:
-                # Download report button
-                st.button("📥 Export Report", use_container_width=True, disabled=True)
+                # Check Campaign Status button for stuck campaigns
+                if is_stuck or campaign['status'] == 'running':
+                    if st.button("🔍 Check Status", width="stretch", 
+                                help="Check and update campaign completion status"):
+                        with st.spinner("Checking campaign status..."):
+                            try:
+                                response = api.check_campaign_status(campaign_id)
+                                if response.get('success'):
+                                    if response.get('updated'):
+                                        st.success("✅ Campaign status updated to completed!")
+                                        time.sleep(1)
+                                        st.rerun()
+                                    else:
+                                        pending = response.get('pending_messages', 0)
+                                        if pending > 0:
+                                            st.info(f"Campaign still has {pending} pending messages")
+                                        else:
+                                            st.info(f"Campaign status: {response.get('message', 'Status checked')}")
+                                else:
+                                    st.error(f"Failed: {response.get('error', response.get('detail', 'Check backend server'))}")
+                            except Exception as e:
+                                st.error(f"Error: {str(e)}. Make sure the Django server is running.")
             
-            # Show debug info for current campaign if debug mode is on
-            if show_debug if 'show_debug' in locals() else False:
-                with st.expander("🔍 Campaign Debug Info", expanded=False):
-                    st.write("**Campaign Data:**")
-                    st.code(json.dumps(campaign, indent=2))
-                    
-                    if stats:
-                        st.write("**Statistics Data:**")
-                        st.code(json.dumps(stats, indent=2))
+            with col6:
+                # Export Report button - enabled when campaign has data to export
+                # Enable for completed campaigns or campaigns with sent messages
+                has_data = campaign.get('sent_count', 0) > 0 or campaign['status'] == 'completed'
+                
+                if st.button("📥 Export Report", 
+                            width="stretch", 
+                            disabled=not has_data,
+                            help="Export campaign report (available when messages have been sent)"):
+                    # Generate campaign report
+                    with st.spinner("Generating report..."):
+                        try:
+                            # Get campaign messages
+                            messages_response = api.get_campaign_messages(campaign_id)
+                            
+                            if messages_response.get('results'):
+                                messages_df = pd.DataFrame(messages_response['results'])
+                                
+                                # Add campaign info to the report
+                                report_data = {
+                                    'Campaign ID': campaign_id,
+                                    'Template': campaign['template_name'],
+                                    'Status': campaign['status'],
+                                    'Total Recipients': campaign.get('total_recipients', 0),
+                                    'Sent': campaign.get('sent_count', 0),
+                                    'Delivered': campaign.get('delivered_count', 0),
+                                    'Read': campaign.get('read_count', 0),
+                                    'Failed': campaign.get('failed_count', 0),
+                                    'Success Rate': f"{campaign.get('success_rate', 0):.2f}%",
+                                    'Created At': campaign.get('created_at', ''),
+                                    'Started At': campaign.get('started_at', ''),
+                                    'Completed At': campaign.get('completed_at', '')
+                                }
+                                
+                                # Create Excel file with multiple sheets
+                                output = io.BytesIO()
+                                
+                                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                                    # Summary sheet
+                                    summary_df = pd.DataFrame([report_data])
+                                    summary_df.to_excel(writer, sheet_name='Summary', index=False)
+                                    
+                                    # Messages detail sheet
+                                    if not messages_df.empty:
+                                        # Select relevant columns
+                                        export_columns = ['phone_number', 'status', 'sent_at', 
+                                                        'delivered_at', 'read_at', 'failed_at', 
+                                                        'error_message']
+                                        available_cols = [col for col in export_columns if col in messages_df.columns]
+                                        messages_export = messages_df[available_cols].copy()
+                                        messages_export.to_excel(writer, sheet_name='Messages', index=False)
+                                
+                                # Generate download
+                                output.seek(0)
+                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                filename = f"campaign_{campaign_id}_report_{timestamp}.xlsx"
+                                
+                                st.download_button(
+                                    label="📥 Download Report",
+                                    data=output,
+                                    file_name=filename,
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                )
+                                st.success(f"✅ Report ready for download: {filename}")
+                            else:
+                                st.warning("No message data available for this campaign")
+                                
+                        except Exception as e:
+                            st.error(f"Failed to generate report: {str(e)}")
             
-            # Detailed Statistics
+            
+            # Simplified Statistics (more minimal)
             if campaign['status'] in ['completed', 'running', 'paused']:
                 st.markdown("---")
-                st.markdown("### 📉 Detailed Statistics")
+                st.markdown("### 📊 Campaign Analytics")
                 
-                col1, col2 = st.columns(2)
+                # Simple metrics in a clean layout
+                col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
-                    # Delivery Funnel
-                    st.markdown("#### Delivery Funnel")
-                    
-                    funnel_data = {
-                        'Stage': ['Queued', 'Sent', 'Delivered', 'Read'],
-                        'Count': [
-                            campaign['total_recipients'],
-                            campaign['sent_count'],
-                            campaign['delivered_count'],
-                            campaign['read_count']
-                        ]
-                    }
-                    
-                    fig = go.Figure(go.Funnel(
-                        y=funnel_data['Stage'],
-                        x=funnel_data['Count'],
-                        textinfo="value+percent initial",
-                        marker=dict(color=['#9E9E9E', '#2196F3', '#4CAF50', '#00BCD4'])
-                    ))
-                    
-                    fig.update_layout(
-                        height=400,
-                        margin=dict(t=20, b=20, l=20, r=20)
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True)
+                    sent_pct = (campaign['sent_count'] / campaign['total_recipients'] * 100) if campaign['total_recipients'] > 0 else 0
+                    st.metric("Sent Rate", f"{sent_pct:.1f}%", f"{campaign['sent_count']}/{campaign['total_recipients']}")
                 
                 with col2:
-                    # Success Rate Gauge
-                    st.markdown("#### Success Rate")
+                    delivered_pct = (campaign['delivered_count'] / campaign['sent_count'] * 100) if campaign['sent_count'] > 0 else 0
+                    st.metric("Delivery Rate", f"{delivered_pct:.1f}%", f"{campaign['delivered_count']} delivered")
+                
+                with col3:
+                    read_pct = (campaign['read_count'] / campaign['delivered_count'] * 100) if campaign['delivered_count'] > 0 else 0
+                    st.metric("Read Rate", f"{read_pct:.1f}%", f"{campaign['read_count']} read")
+                
+                with col4:
+                    failed_pct = (campaign['failed_count'] / campaign['total_recipients'] * 100) if campaign['total_recipients'] > 0 else 0
+                    st.metric("Failed Rate", f"{failed_pct:.1f}%", f"{campaign['failed_count']} failed", delta_color="inverse")
+                
+                # Simple progress visualization
+                if campaign['total_recipients'] > 0:
+                    st.markdown("#### Message Flow")
                     
-                    success_rate = campaign.get('success_rate', 0)
+                    # Display as simple progress bars
+                    stages = ['Sent', 'Delivered', 'Read']
+                    counts = [
+                        campaign['sent_count'],
+                        campaign['delivered_count'],
+                        campaign['read_count']
+                    ]
+                    colors = ['#2196F3', '#4CAF50', '#00BCD4']
                     
-                    fig = go.Figure(go.Indicator(
-                        mode="gauge+number+delta",
-                        value=success_rate,
-                        domain={'x': [0, 1], 'y': [0, 1]},
-                        title={'text': "Delivery Rate (%)"},
-                        delta={'reference': 95, 'increasing': {'color': "green"}},
-                        gauge={
-                            'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                            'bar': {'color': "darkblue"},
-                            'bgcolor': "white",
-                            'borderwidth': 2,
-                            'bordercolor': "gray",
-                            'steps': [
-                                {'range': [0, 50], 'color': '#ffcccc'},
-                                {'range': [50, 80], 'color': '#ffffcc'},
-                                {'range': [80, 100], 'color': '#ccffcc'}
-                            ],
-                            'threshold': {
-                                'line': {'color': "red", 'width': 4},
-                                'thickness': 0.75,
-                                'value': 95
-                            }
-                        }
-                    ))
-                    
-                    fig.update_layout(
-                        height=400,
-                        margin=dict(t=20, b=20, l=20, r=20)
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True)
+                    for stage, count, color in zip(stages, counts, colors):
+                        pct = (count / campaign['total_recipients']) * 100
+                        col1, col2, col3 = st.columns([1, 3, 1])
+                        with col1:
+                            st.caption(stage)
+                        with col2:
+                            st.progress(pct / 100)
+                        with col3:
+                            st.caption(f"{count} ({pct:.1f}%)")
             
             # Campaign Timeline
             if campaign.get('started_at'):
@@ -433,7 +634,7 @@ if campaigns_response.get('results'):
                         if available_columns:
                             st.dataframe(
                                 messages_df[available_columns],
-                                use_container_width=True,
+                                width="stretch",
                                 hide_index=True
                             )
                         else:
