@@ -46,9 +46,9 @@ def login_form():
             
             col_login, col_signup = st.columns(2)
             with col_login:
-                login_button = st.form_submit_button("Login", type="primary")
+                login_button = st.form_submit_button("Login", type="primary", width='stretch')
             with col_signup:
-                signup_button = st.form_submit_button("Sign Up")
+                signup_button = st.form_submit_button("Sign Up", width='stretch')
             
             if login_button:
                 if username and password:
